@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Malla Interactiva de Carrera</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(to bottom right, #e0f7fa, #b3e5fc); /* Degradado azul-celeste más suave */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem; /* Asegura padding en todos los tamaños de pantalla */
+        }
+        .container-wrapper {
+            @apply max-w-7xl mx-auto w-full;
+        }
+
+        /* Estilos generales para las tarjetas de curso */
+        .course-card {
+            /* Aumentado el padding para dar más espacio al icono */
+            @apply bg-white p-6 rounded-xl shadow-lg transition-all duration-300 ease-in-out border relative;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            transform-origin: center;
+            cursor: pointer; /* Cursor por defecto */
+        }
+        .course-card:hover {
+            @apply shadow-xl transform scale-102;
+        }
+
+        /* Estados de los cursos */
+        .course-card.selected {
+            @apply border-blue-600 ring-4 ring-blue-200 bg-blue-50;
+        }
+        .course-card.prerequisite {
+            @apply border-yellow-500 ring-2 ring-yellow-300 bg-yellow-50;
+        }
+        .course-card.post-requisite {
+            @apply border-green-500 ring-2 ring-green-300 bg-green-50;
+        }
+
+        /* Estado: Completado (Verde) */
+        .course-card.completed {
+            @apply bg-green-100 text-gray-600 opacity-90;
+            border-color: #a7f3d0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            animation: completeFadeIn 0.3s ease-out forwards;
+            cursor: default; /* No cambia el cursor al pasar el ratón */
+        }
+        .course-card.completed .course-name, .course-card.completed .course-credits {
+            text-decoration: line-through;
+            color: #4b5563;
+        }
+        .course-card.completed:hover { /* Anula el hover para completados */
+            @apply transform-none shadow-lg;
+        }
+
+        /* Estado: Disponible / En Curso (Azul oscuro) */
+        .course-card.available {
+            @apply border-blue-600; /* Borde azul oscuro */
+        }
+
+        /* Estado: Bloqueado (Gris) */
+        .course-card.locked {
+            @apply bg-gray-200 text-gray-500 cursor-not-allowed opacity-70 border-gray-300;
+            box-shadow: none;
+        }
+        .course-card.locked:hover { /* Anula el hover para bloqueados */
+            @apply transform-none shadow-none;
+        }
+        .course-card.locked .course-name, .course-card.locked .course-credits {
+            color: #9ca3af;
+        }
+        .course-card.locked .toggle-completion-icon svg {
+            @apply text-gray-400; /* Icono gris para bloqueados */
+        }
+
+        /* Animación para la finalización */
+        @keyframes completeFadeIn {
+            from { transform: scale(0.95); opacity: 0.7; }
+            to { transform: scale(1); opacity: 0.9; }
+        }
+
+        /* Estilos para el icono de alternar completado (cuadrado) */
+        .toggle-completion-icon {
+            @apply absolute top-3 right-3 z-50; /* Posicionado a la derecha */
+            width: 32px; /* Ancho explícito */
+            height: 32px; /* Alto explícito */
+            display: flex; /* Usar flexbox para centrar SVG */
+            justify-content: center;
+            align-items: center;
+            border-radius: 4px;
+            cursor: pointer; /* Asegura que sea clickeable */
+        }
+        .toggle-completion-icon svg {
+            @apply h-6 w-6 transition-colors duration-200; /* Tamaño del SVG */
+        }
+        .toggle-completion-icon.uncompleted svg {
+            @apply text-gray-400 hover:text-blue-500;
+        }
+        .toggle-completion-icon.completed svg {
+            @apply text-green-600;
+        }
+        .toggle-completion-icon.locked-icon {
+            pointer-events: none; /* Deshabilita clics en el icono si el curso está bloqueado */
+            cursor: not-allowed; /* Indica que no es clickeable */
+        }
+
+        /* Diseño de cuadrícula para semestres */
+        .semester-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* Ajustar cuadrícula para pantallas más grandes */
+        @media (min-width: 768px) {
+            .semester-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (min-width: 1024px) {
+            .semester-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        @media (min-width: 1280px) {
+            .semester-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        @media (min-width: 1536px) {
+            .semester-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
+        /* Estilo para el panel de detalles */
+        #course-details {
+            @apply bg-white p-6 rounded-xl shadow-xl border border-gray-200 mt-8;
+        }
+        #course-details button {
+            @apply px-5 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors duration-200 shadow-md;
+        }
+
+        /* Estilo para el mensaje temporal de bloqueo */
+        #temp-locked-message {
+            @apply fixed bottom-8 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300 opacity-0;
+            pointer-events: none; /* No bloquear interacciones debajo */
+        }
+        #temp-locked-message.opacity-100 {
+            opacity: 1;
+        }
+
+        /* Estilos para el indicador de carga */
+        #loading-indicator {
+            @apply fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-[100];
+            color: white;
+            font-size: 1.5rem;
+            display: none; /* Oculto por defecto */
+        }
+        #loading-indicator.active {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wrapper">
+        <h1 class="text-4xl font-bold text-center text-gray-800 mb-4">Malla Interactiva de Carrera</h1>
+        <p class="text-center text-gray-600 mb-2">
+            Haz clic en el icono de **cuadrado/check** para marcar un curso como completado.
+            Los cursos **disponibles/en curso** tienen un borde azul oscuro.
+            Los cursos **bloqueados** (pre-requisitos no cumplidos) están en gris y no son interactivos.
+            Haz clic en cualquier otra parte del curso (si está disponible) para ver sus detalles y resaltar sus pre-requisitos (amarillo) y post-requisitos (verde).
+        </p>
+        <p id="user-id-display" class="text-center text-gray-500 text-sm mb-8">Cargando usuario...</p>
+
+
+        <div id="curriculum-grid" class="semester-grid">
+            <!-- Los cursos se inyectarán aquí mediante JavaScript -->
+        </div>
+
+        <div id="course-details" class="hidden">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-3">Detalles del Curso</h2>
+            <p class="text-lg text-gray-800 mb-2"><strong>Nombre:</strong> <span id="detail-name"></span></p>
+            <p class="text-md text-gray-600 mb-2"><strong>Créditos:</strong> <span id="detail-credits"></span></p>
+            <p class="text-md text-gray-600 mb-2"><strong>Semestre:</strong> <span id="detail-semester"></span></p>
+            <div class="mb-2">
+                <strong class="text-md text-gray-600">Pre-requisitos:</strong>
+                <ul id="detail-prerequisites" class="list-disc list-inside text-gray-700 pl-4">
+                    <!-- Los pre-requisitos se listarán aquí -->
+                </ul>
+            </div>
+            <div class="mb-2">
+                <strong class="text-md text-gray-600">Post-requisitos:</strong>
+                <ul id="detail-postrequisites" class="list-disc list-inside text-gray-700 pl-4">
+                    <!-- Los post-requisitos se listarán aquí -->
+                </ul>
+            </div>
+            <button id="close-details" class="mt-4">
+                Cerrar Detalles
+            </button>
+        </div>
+    </div>
+
+    <!-- Mensaje temporal para cursos bloqueados -->
+    <div id="temp-locked-message"></div>
+
+    <!-- Indicador de carga -->
+    <div id="loading-indicator">Cargando...</div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variables globales de Canvas (asegúrate de que estén definidas)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Inicializar Firebase
+        let app;
+        let db;
+        let auth;
+        let userId = 'loading'; // Estado inicial de userId
+
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const userIdDisplay = document.getElementById('user-id-display');
+
+        /**
+         * Muestra u oculta el indicador de carga.
+         * @param {boolean} show - True para mostrar, false para ocultar.
+         */
+        function showLoading(show) {
+            if (show) {
+                loadingIndicator.classList.add('active');
+            } else {
+                loadingIndicator.classList.remove('active');
+            }
+        }
+
+        // Configuración de la aplicación
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            // Listener de cambios en el estado de autenticación
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    userIdDisplay.textContent = `ID de Usuario: ${userId}`;
+                    console.log("Usuario autenticado:", userId);
+                    // Una vez autenticado, cargar y escuchar los datos de Firestore
+                    loadCompletedCoursesFromFirestore();
+                } else {
+                    // Si no hay usuario, intentar autenticación anónima o con token
+                    try {
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Error al autenticar:", error);
+                        userIdDisplay.textContent = "Error al cargar usuario.";
+                        showLoading(false);
+                    }
+                }
+            });
+
+        } catch (error) {
+            console.error("Error al inicializar Firebase:", error);
+            userIdDisplay.textContent = "Error de configuración de Firebase.";
+            showLoading(false);
+        }
+
+        // --- Lógica de la Malla Interactiva ---
+        const courses = [
+            { id: 'prog1', name: 'Programación I', semester: 1, credits: 6, prerequisites: [], description: 'Introducción a los fundamentos de la programación.' },
+            { id: 'calc1', name: 'Cálculo I', semester: 1, credits: 6, prerequisites: [], description: 'Conceptos básicos de cálculo diferencial e integral.' },
+            { id: 'fis1', name: 'Física I', semester: 1, credits: 5, prerequisites: [], description: 'Fundamentos de la mecánica clásica.' },
+            { id: 'alg_lin', name: 'Álgebra Lineal', semester: 1, credits: 5, prerequisites: [], description: 'Matrices, vectores y sistemas de ecuaciones lineales.' },
+
+            { id: 'prog2', name: 'Programación II', semester: 2, credits: 6, prerequisites: ['prog1'], description: 'Programación orientada a objetos y estructuras de datos.' },
+            { id: 'calc2', name: 'Cálculo II', semester: 2, credits: 6, prerequisites: ['calc1'], description: 'Cálculo multivariable y series.' },
+            { id: 'fis2', name: 'Física II', semester: 2, credits: 5, prerequisites: ['fis1'], description: 'Electromagnetismo y óptica.' },
+            { id: 'mat_disc', name: 'Matemática Discreta', semester: 2, credits: 4, prerequisites: [], description: 'Lógica, conjuntos, relaciones y grafos.' },
+
+            { id: 'est_dat', name: 'Estructuras de Datos', semester: 3, credits: 6, prerequisites: ['prog2'], description: 'Implementación y análisis de estructuras de datos avanzadas.' },
+            { id: 'met_num', 'name': 'Métodos Numéricos', semester: 3, credits: 5, prerequisites: ['calc2', 'prog2'], description: 'Técnicas numéricas para resolver problemas matemáticos.' },
+            { id: 'arq_comp', name: 'Arquitectura de Computadores', semester: 3, credits: 5, prerequisites: [], description: 'Organización y diseño de sistemas computacionales.' },
+            { id: 'estadistica', name: 'Estadística', semester: 3, credits: 4, prerequisites: ['calc1'], description: 'Probabilidad y estadística aplicada.' },
+
+            { id: 'bd', name: 'Bases de Datos', semester: 4, credits: 6, prerequisites: ['est_dat'], description: 'Diseño y gestión de sistemas de bases de datos.' },
+            { id: 'sis_ope', name: 'Sistemas Operativos', semester: 4, credits: 6, prerequisites: ['arq_comp', 'prog2'], description: 'Principios y funcionamiento de los sistemas operativos.' },
+            { id: 'redes', name: 'Redes de Computadores', semester: 4, credits: 5, prerequisites: ['arq_comp'], description: 'Fundamentos de redes y protocolos de comunicación.' },
+            { id: 'ing_soft1', name: 'Ingeniería de Software I', semester: 4, credits: 5, prerequisites: ['est_dat'], description: 'Ciclo de vida del software y metodologías de desarrollo.' },
+
+            { id: 'ia', name: 'Inteligencia Artificial', semester: 5, credits: 6, prerequisites: ['est_dat', 'mat_disc'], description: 'Introducción a los conceptos y algoritmos de IA.' },
+            { id: 'compiladores', name: 'Compiladores', semester: 5, credits: 6, prerequisites: ['est_dat', 'mat_disc'], description: 'Diseño e implementación de compiladores.' },
+            { id: 'seg_info', name: 'Seguridad Informática', semester: 5, credits: 5, prerequisites: ['redes'], description: 'Principios de seguridad en sistemas y redes.' },
+            { id: 'ing_soft2', name: 'Ingeniería de Software II', semester: 5, credits: 5, prerequisites: ['ing_soft1', 'bd'], description: 'Patrones de diseño y gestión de proyectos de software.' },
+
+            { id: 'proy_final', name: 'Proyecto de Título', semester: 6, credits: 10, prerequisites: ['ia', 'ing_soft2'], description: 'Desarrollo de un proyecto final de carrera.' },
+            { id: 'etica', name: 'Ética Profesional', semester: 6, credits: 3, prerequisites: [], description: 'Consideraciones éticas en la ingeniería.' },
+            { id: 'optativa1', name: 'Optativa I', semester: 6, credits: 5, prerequisites: [], description: 'Curso a elección del estudiante.' },
+            { id: 'optativa2', name: 'Optativa II', semester: 6, credits: 5, prerequisites: [], description: 'Curso a elección del estudiante.' }
+        ];
+
+        const curriculumGrid = document.getElementById('curriculum-grid');
+        const courseDetailsPanel = document.getElementById('course-details');
+        const detailName = document.getElementById('detail-name');
+        const detailCredits = document.getElementById('detail-credits');
+        const detailSemester = document.getElementById('detail-semester');
+        const detailPrerequisites = document.getElementById('detail-prerequisites');
+        const detailPostrequisites = document.getElementById('detail-postrequisites');
+        const closeDetailsButton = document.getElementById('close-details');
+
+        let selectedCourseId = null;
+        let completedCoursesSet = new Set();
+
+        /**
+         * Carga los IDs de los cursos completados desde Firestore en tiempo real.
+         */
+        function loadCompletedCoursesFromFirestore() {
+            showLoading(true);
+            // Ruta de la colección para datos privados del usuario
+            const userDocRef = doc(db, `artifacts/${appId}/users/${userId}/completedCourses`, 'userProgress');
+
+            onSnapshot(userDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // Firestore no permite arrays anidados fácilmente, así que guardamos como JSON string
+                    // y lo parseamos al leer.
+                    const completedCoursesArray = data.completedCourses ? JSON.parse(data.completedCourses) : [];
+                    completedCoursesSet = new Set(completedCoursesArray);
+                    console.log("Cursos completados cargados de Firestore:", Array.from(completedCoursesSet));
+                } else {
+                    console.log("No hay datos de progreso para este usuario en Firestore.");
+                    completedCoursesSet = new Set(); // Reiniciar si no hay datos
+                }
+                renderCurriculum(); // Volver a renderizar la malla con los datos actualizados
+                showLoading(false);
+            }, (error) => {
+                console.error("Error al cargar los cursos completados de Firestore:", error);
+                showLoading(false);
+            });
+        }
+
+        /**
+         * Guarda los IDs de los cursos completados en Firestore.
+         */
+        async function saveCompletedCoursesToFirestore() {
+            if (!userId || !db) {
+                console.error("Firestore o userId no están listos para guardar.");
+                return;
+            }
+            showLoading(true);
+            try {
+                // Ruta del documento para guardar el progreso del usuario
+                const userDocRef = doc(db, `artifacts/${appId}/users/${userId}/completedCourses`, 'userProgress');
+                // Convertir Set a Array y luego a JSON string para guardar en Firestore
+                const dataToSave = {
+                    completedCourses: JSON.stringify(Array.from(completedCoursesSet))
+                };
+                await setDoc(userDocRef, dataToSave, { merge: true }); // Usar merge para no sobrescribir otros campos si los hubiera
+                console.log("Cursos completados guardados en Firestore.");
+            } catch (error) {
+                console.error("Error al guardar los cursos completados en Firestore:", error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        /**
+         * Obtiene los nombres de los pre-requisitos no completados para un curso dado.
+         * @param {string} courseId - El ID del curso.
+         * @returns {string[]} Un array con los nombres de los pre-requisitos no completados.
+         */
+        function getUncompletedPrerequisites(courseId) {
+            const course = courses.find(c => c.id === courseId);
+            if (!course) return [];
+            return course.prerequisites
+                .filter(preReqId => !completedCoursesSet.has(preReqId))
+                .map(preReqId => courses.find(c => c.id === preReqId)?.name || 'Curso Desconocido');
+        }
+
+        /**
+         * Determina si un curso está bloqueado (no tiene todos sus pre-requisitos completados).
+         * @param {string} courseId - El ID del curso a verificar.
+         * @returns {boolean} True si el curso está bloqueado, false en caso contrario.
+         */
+        function isCourseLocked(courseId) {
+            const course = courses.find(c => c.id === courseId);
+            if (!course) return true;
+            return course.prerequisites.some(preReqId => !completedCoursesSet.has(preReqId));
+        }
+
+        /**
+         * Muestra un mensaje temporal en la parte inferior de la pantalla.
+         * @param {string} message - El mensaje a mostrar.
+         */
+        let messageTimeoutId; // Para limpiar el timeout anterior
+        function displayTemporaryMessage(message) {
+            let tempMessageDiv = document.getElementById('temp-locked-message');
+            if (!tempMessageDiv) {
+                tempMessageDiv = document.createElement('div');
+                tempMessageDiv.id = 'temp-locked-message';
+                document.body.appendChild(tempMessageDiv);
+            }
+            tempMessageDiv.textContent = message;
+            tempMessageDiv.classList.remove('opacity-0');
+            tempMessageDiv.classList.add('opacity-100');
+
+            clearTimeout(messageTimeoutId);
+            messageTimeoutId = setTimeout(() => {
+                tempMessageDiv.classList.remove('opacity-100');
+                tempMessageDiv.classList.add('opacity-0');
+            }, 3000); // El mensaje desaparece después de 3 segundos
+        }
+
+
+        /**
+         * Alterna el estado de completado de un curso y actualiza su estado visual.
+         * @param {string} courseId - El ID del curso a alternar.
+         * @param {boolean} isCompleted - El nuevo estado de completado.
+         */
+        async function toggleCourseCompletion(courseId, isCompleted) {
+            const courseCard = document.getElementById(`course-${courseId}`);
+            const toggleIconContainer = courseCard.querySelector('.toggle-completion-icon');
+            const svgIcon = toggleIconContainer.querySelector('svg');
+
+            if (isCompleted) {
+                completedCoursesSet.add(courseId);
+                courseCard.classList.add('completed');
+                courseCard.classList.remove('available'); // Remover clase 'available' si se completa
+                toggleIconContainer.classList.remove('uncompleted');
+                toggleIconContainer.classList.add('completed');
+                // SVG de cuadrado con check
+                svgIcon.innerHTML = '<path d="M9 12l2 2 4-4m-6 4a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H9a2 2 0 01-2-2z" />';
+                svgIcon.setAttribute('fill', 'currentColor');
+            } else {
+                completedCoursesSet.delete(courseId);
+                courseCard.classList.remove('completed');
+                toggleIconContainer.classList.remove('completed');
+                toggleIconContainer.classList.add('uncompleted');
+                // SVG de cuadrado vacío
+                svgIcon.innerHTML = '<rect x="4" y="4" width="16" height="16" rx="3" ry="3" />';
+                svgIcon.setAttribute('fill', 'none');
+
+                // Si se descompleta, verificar si ahora está bloqueado o disponible
+                if (isCourseLocked(courseId)) {
+                    courseCard.classList.add('locked');
+                } else {
+                    courseCard.classList.add('available');
+                }
+            }
+            await saveCompletedCoursesToFirestore(); // Guardar cambios en Firestore
+            // renderCurriculum() se llamará automáticamente por el onSnapshot de Firestore
+        }
+
+        /**
+         * Renderiza la cuadrícula de la malla, agrupando cursos por semestre.
+         * También inicializa el estado de completado y bloqueado/disponible.
+         */
+        function renderCurriculum() {
+            // No llamar a loadCompletedCourses() aquí, ya que onSnapshot lo maneja
+            const semesters = {};
+            courses.forEach(course => {
+                if (!semesters[course.semester]) {
+                    semesters[course.semester] = [];
+                }
+                semesters[course.semester].push(course);
+            });
+
+            curriculumGrid.innerHTML = '';
+
+            const sortedSemesters = Object.keys(semesters).sort((a, b) => parseInt(a) - parseInt(b));
+
+            sortedSemesters.forEach(semesterNum => {
+                const semesterDiv = document.createElement('div');
+                semesterDiv.className = 'semester-column bg-gray-100 p-4 rounded-xl shadow-inner';
+                semesterDiv.innerHTML = `<h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">Semestre ${semesterNum}</h3>`;
+
+                semesters[semesterNum].forEach(course => {
+                    const courseCard = document.createElement('div');
+                    courseCard.id = `course-${course.id}`;
+                    courseCard.className = 'course-card';
+
+                    const isCompleted = completedCoursesSet.has(course.id);
+                    const isLocked = !isCompleted && isCourseLocked(course.id); // Un curso no puede estar bloqueado y completado a la vez
+
+                    if (isCompleted) {
+                        courseCard.classList.add('completed');
+                    } else if (isLocked) {
+                        courseCard.classList.add('locked');
+                        // Añadir título para el tooltip de cursos bloqueados
+                        const uncompletedReqs = getUncompletedPrerequisites(course.id);
+                        if (uncompletedReqs.length > 0) {
+                            courseCard.title = `Necesitas completar: ${uncompletedReqs.join(', ')} para desbloquear este curso.`;
+                        } else {
+                            courseCard.title = 'Este curso está bloqueado.'; // Fallback si no hay pre-requisitos definidos
+                        }
+                    } else {
+                        courseCard.classList.add('available'); // Desbloqueado y no completado
+                    }
+
+                    // Icono de alternar completado
+                    const toggleIconContainer = document.createElement('div');
+                    toggleIconContainer.className = `toggle-completion-icon ${isCompleted ? 'completed' : 'uncompleted'} ${isLocked ? 'locked-icon' : ''}`;
+                    toggleIconContainer.dataset.courseId = course.id;
+
+                    const svgIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    svgIcon.setAttribute("viewBox", "0 0 24 24");
+                    svgIcon.setAttribute("stroke", "currentColor");
+                    svgIcon.setAttribute("stroke-width", "2");
+
+                    if (isCompleted) {
+                        svgIcon.setAttribute("fill", "currentColor");
+                        svgIcon.innerHTML = '<path d="M9 12l2 2 4-4m-6 4a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H9a2 2 0 01-2-2z" />';
+                    } else {
+                        svgIcon.setAttribute("fill", "none");
+                        svgIcon.innerHTML = '<rect x="4" y="4" width="16" height="16" rx="3" ry="3" />';
+                    }
+
+                    toggleIconContainer.appendChild(svgIcon);
+                    toggleIconContainer.addEventListener('click', (event) => {
+                        event.stopPropagation(); // Evitar que el clic en el icono active la tarjeta
+                        if (!isLocked) {
+                            toggleCourseCompletion(course.id, !completedCoursesSet.has(course.id));
+                        }
+                    });
+                    courseCard.appendChild(toggleIconContainer);
+
+                    // Contenido del curso (nombre y créditos)
+                    const courseContent = document.createElement('div');
+                    courseContent.className = 'flex flex-col justify-center items-center w-full h-full';
+                    courseContent.innerHTML = `
+                        <p class="font-medium text-gray-800 text-lg course-name">${course.name}</p>
+                        <p class="text-sm text-gray-500 course-credits">${course.credits} Créditos</p>
+                    `;
+                    courseCard.appendChild(courseContent);
+
+                    // Listener para seleccionar la tarjeta (solo si no está bloqueado)
+                    courseCard.addEventListener('click', () => {
+                        if (isLocked) {
+                            displayTemporaryMessage(courseCard.title); // Muestra el mensaje al hacer clic en un curso bloqueado
+                        } else {
+                            selectCourse(course.id);
+                        }
+                    });
+                    semesterDiv.appendChild(courseCard);
+                });
+                curriculumGrid.appendChild(semesterDiv);
+            });
+        }
+
+        /**
+         * Maneja la selección de un curso, mostrando sus detalles y resaltando
+         * pre-requisitos y post-requisitos.
+         * @param {string} courseId - El ID del curso seleccionado.
+         */
+        function selectCourse(courseId) {
+            document.querySelectorAll('.course-card').forEach(card => {
+                card.classList.remove('selected', 'prerequisite', 'post-requisite');
+            });
+
+            const selectedCourse = courses.find(c => c.id === courseId);
+            if (!selectedCourse) {
+                console.error('Curso no encontrado:', courseId);
+                return;
+            }
+
+            document.getElementById(`course-${courseId}`).classList.add('selected');
+            selectedCourseId = courseId;
+
+            detailName.textContent = selectedCourse.name;
+            detailCredits.textContent = selectedCourse.credits;
+            detailSemester.textContent = selectedCourse.semester;
+
+            detailPrerequisites.innerHTML = '';
+            detailPostrequisites.innerHTML = '';
+
+            if (selectedCourse.prerequisites.length > 0) {
+                selectedCourse.prerequisites.forEach(preReqId => {
+                    const preReqCourse = courses.find(c => c.id === preReqId);
+                    if (preReqCourse) {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = preReqCourse.name;
+                        detailPrerequisites.appendChild(listItem);
+                        const preReqCard = document.getElementById(`course-${preReqId}`);
+                        if (preReqCard && !completedCoursesSet.has(preReqId)) {
+                            preReqCard.classList.add('prerequisite');
+                        }
+                    }
+                });
+            } else {
+                const listItem = document.createElement('li');
+                listItem.textContent = 'Ninguno';
+                detailPrerequisites.appendChild(listItem);
+            }
+
+            const postRequisites = courses.filter(c => c.prerequisites.includes(courseId));
+            if (postRequisites.length > 0) {
+                postRequisites.forEach(postReqCourse => {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = postReqCourse.name;
+                    detailPostrequisites.appendChild(listItem);
+                    const postReqCard = document.getElementById(`course-${postReqCourse.id}`);
+                    if (postReqCard && !completedCoursesSet.has(postReqCourse.id) && !isCourseLocked(postReqCourse.id)) {
+                        postReqCard.classList.add('post-requisite');
+                    }
+                });
+            } else {
+                const listItem = document.createElement('li');
+                listItem.textContent = 'Ninguno';
+                detailPostrequisites.appendChild(listItem);
+            }
+
+            courseDetailsPanel.classList.remove('hidden');
+        }
+
+        closeDetailsButton.addEventListener('click', () => {
+            courseDetailsPanel.classList.add('hidden');
+            document.querySelectorAll('.course-card').forEach(card => {
+                card.classList.remove('selected', 'prerequisite', 'post-requisite');
+            });
+            selectedCourseId = null;
+        });
+
+        // La renderización inicial se dispara después de la autenticación de Firebase
+        // window.onload = renderCurriculum; // Ya no es necesario aquí
+    </script>
+</body>
+</html>
