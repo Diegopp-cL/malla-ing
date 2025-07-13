@@ -222,20 +222,32 @@
 
     <!-- Firebase SDKs -->
     <script type="module">
+        // Importaciones de Firebase SDKs. Estas son las únicas que necesitas.
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Variables globales de Canvas (asegúrate de que estén definidas)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // ***** TU CONFIGURACIÓN DE FIREBASE *****
+        // Esta es la única definición de firebaseConfig que debe existir.
+        const firebaseConfig = {
+          apiKey: "AIzaSyB3KZeSDqI3HgS_tA6MMi4CLnEqA_i3rk4",
+          authDomain: "malla-ing.firebaseapp.com",
+          projectId: "malla-ing",
+          storageBucket: "malla-ing.firebasestorage.app",
+          messagingSenderId: "45163661704",
+          appId: "1:45163661704:web:3539b656e138f61c82523d",
+          measurementId: "G-P2S0KFFVZS" // Puedes dejarlo o quitarlo si no usas Analytics
+        };
+        // ****************************************
 
-        // Inicializar Firebase
+        // Usamos el projectId de tu configuración de Firebase como appId para la ruta de Firestore
+        const appId = firebaseConfig.projectId;
+
+        // Declaración de variables de Firebase (se inicializarán dentro del bloque try/catch)
         let app;
         let db;
         let auth;
-        let userId = 'loading'; // Estado inicial de userId
+        let userId = 'loading'; // Estado inicial del ID de usuario
 
         const loadingIndicator = document.getElementById('loading-indicator');
         const userIdDisplay = document.getElementById('user-id-display');
@@ -252,31 +264,27 @@
             }
         }
 
-        // Configuración de la aplicación
+        // Configuración e inicialización de la aplicación Firebase
         try {
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
+            app = initializeApp(firebaseConfig); // Inicializa la aplicación Firebase
+            db = getFirestore(app); // Obtiene la instancia de Firestore
+            auth = getAuth(app); // Obtiene la instancia de autenticación
 
-            // Listener de cambios en el estado de autenticación
+            // Listener de cambios en el estado de autenticación de Firebase
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    userId = user.uid;
+                    userId = user.uid; // Asigna el ID del usuario autenticado
                     userIdDisplay.textContent = `ID de Usuario: ${userId}`;
                     console.log("Usuario autenticado:", userId);
-                    // Una vez autenticado, cargar y escuchar los datos de Firestore
+                    // Una vez autenticado, carga y escucha los datos de progreso del usuario desde Firestore
                     loadCompletedCoursesFromFirestore();
                 } else {
-                    // Si no hay usuario, intentar autenticación anónima o con token
+                    // Si no hay usuario autenticado, intenta la autenticación anónima
                     try {
-                        if (initialAuthToken) {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
+                        await signInAnonymously(auth);
                     } catch (error) {
-                        console.error("Error al autenticar:", error);
-                        userIdDisplay.textContent = "Error al cargar usuario.";
+                        console.error("Error al autenticar anónimamente:", error);
+                        userIdDisplay.textContent = "Error al cargar usuario. Intenta recargar la página.";
                         showLoading(false);
                     }
                 }
@@ -284,11 +292,12 @@
 
         } catch (error) {
             console.error("Error al inicializar Firebase:", error);
-            userIdDisplay.textContent = "Error de configuración de Firebase.";
+            userIdDisplay.textContent = "Error de configuración de Firebase. Revisa tu consola de Firebase.";
             showLoading(false);
         }
 
-        // --- Lógica de la Malla Interactiva ---
+        // --- Datos y Lógica de la Malla Interactiva ---
+        // Define los cursos de tu carrera. Modifica esta sección para que coincida con tu malla.
         const courses = [
             { id: 'prog1', name: 'Programación I', semester: 1, credits: 6, prerequisites: [], description: 'Introducción a los fundamentos de la programación.' },
             { id: 'calc1', name: 'Cálculo I', semester: 1, credits: 6, prerequisites: [], description: 'Conceptos básicos de cálculo diferencial e integral.' },
@@ -335,25 +344,26 @@
 
         /**
          * Carga los IDs de los cursos completados desde Firestore en tiempo real.
+         * Se suscribe a los cambios en el documento de progreso del usuario.
          */
         function loadCompletedCoursesFromFirestore() {
             showLoading(true);
-            // Ruta de la colección para datos privados del usuario
+            // Ruta del documento para datos privados del usuario en Firestore
             const userDocRef = doc(db, `artifacts/${appId}/users/${userId}/completedCourses`, 'userProgress');
 
+            // onSnapshot proporciona actualizaciones en tiempo real
             onSnapshot(userDocRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    // Firestore no permite arrays anidados fácilmente, así que guardamos como JSON string
-                    // y lo parseamos al leer.
+                    // Los cursos se guardan como un JSON string, así que se parsean al leer
                     const completedCoursesArray = data.completedCourses ? JSON.parse(data.completedCourses) : [];
                     completedCoursesSet = new Set(completedCoursesArray);
                     console.log("Cursos completados cargados de Firestore:", Array.from(completedCoursesSet));
                 } else {
                     console.log("No hay datos de progreso para este usuario en Firestore.");
-                    completedCoursesSet = new Set(); // Reiniciar si no hay datos
+                    completedCoursesSet = new Set(); // Reinicia si no hay datos guardados
                 }
-                renderCurriculum(); // Volver a renderizar la malla con los datos actualizados
+                renderCurriculum(); // Vuelve a renderizar la malla con los datos actualizados
                 showLoading(false);
             }, (error) => {
                 console.error("Error al cargar los cursos completados de Firestore:", error);
@@ -363,6 +373,7 @@
 
         /**
          * Guarda los IDs de los cursos completados en Firestore.
+         * Se llama cada vez que se marca o desmarca un curso.
          */
         async function saveCompletedCoursesToFirestore() {
             if (!userId || !db) {
@@ -373,11 +384,11 @@
             try {
                 // Ruta del documento para guardar el progreso del usuario
                 const userDocRef = doc(db, `artifacts/${appId}/users/${userId}/completedCourses`, 'userProgress');
-                // Convertir Set a Array y luego a JSON string para guardar en Firestore
+                // Convierte el Set de IDs a un Array y luego a un JSON string para guardarlo
                 const dataToSave = {
                     completedCourses: JSON.stringify(Array.from(completedCoursesSet))
                 };
-                await setDoc(userDocRef, dataToSave, { merge: true }); // Usar merge para no sobrescribir otros campos si los hubiera
+                await setDoc(userDocRef, dataToSave, { merge: true }); // Usa merge para no sobrescribir otros campos
                 console.log("Cursos completados guardados en Firestore.");
             } catch (error) {
                 console.error("Error al guardar los cursos completados en Firestore:", error);
@@ -388,6 +399,7 @@
 
         /**
          * Obtiene los nombres de los pre-requisitos no completados para un curso dado.
+         * Se usa para el mensaje de cursos bloqueados.
          * @param {string} courseId - El ID del curso.
          * @returns {string[]} Un array con los nombres de los pre-requisitos no completados.
          */
@@ -414,7 +426,7 @@
          * Muestra un mensaje temporal en la parte inferior de la pantalla.
          * @param {string} message - El mensaje a mostrar.
          */
-        let messageTimeoutId; // Para limpiar el timeout anterior
+        let messageTimeoutId; // Variable para limpiar el timeout anterior y evitar múltiples mensajes
         function displayTemporaryMessage(message) {
             let tempMessageDiv = document.getElementById('temp-locked-message');
             if (!tempMessageDiv) {
@@ -426,7 +438,7 @@
             tempMessageDiv.classList.remove('opacity-0');
             tempMessageDiv.classList.add('opacity-100');
 
-            clearTimeout(messageTimeoutId);
+            clearTimeout(messageTimeoutId); // Limpia cualquier timeout anterior
             messageTimeoutId = setTimeout(() => {
                 tempMessageDiv.classList.remove('opacity-100');
                 tempMessageDiv.classList.add('opacity-0');
@@ -435,7 +447,7 @@
 
 
         /**
-         * Alterna el estado de completado de un curso y actualiza su estado visual.
+         * Alterna el estado de completado de un curso y actualiza su estado visual y en Firestore.
          * @param {string} courseId - El ID del curso a alternar.
          * @param {boolean} isCompleted - El nuevo estado de completado.
          */
@@ -447,10 +459,10 @@
             if (isCompleted) {
                 completedCoursesSet.add(courseId);
                 courseCard.classList.add('completed');
-                courseCard.classList.remove('available'); // Remover clase 'available' si se completa
+                courseCard.classList.remove('available'); // Remueve la clase 'available' si se completa
                 toggleIconContainer.classList.remove('uncompleted');
                 toggleIconContainer.classList.add('completed');
-                // SVG de cuadrado con check
+                // Cambia el SVG a un cuadrado con check
                 svgIcon.innerHTML = '<path d="M9 12l2 2 4-4m-6 4a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H9a2 2 0 01-2-2z" />';
                 svgIcon.setAttribute('fill', 'currentColor');
             } else {
@@ -458,27 +470,28 @@
                 courseCard.classList.remove('completed');
                 toggleIconContainer.classList.remove('completed');
                 toggleIconContainer.classList.add('uncompleted');
-                // SVG de cuadrado vacío
+                // Cambia el SVG a un cuadrado vacío
                 svgIcon.innerHTML = '<rect x="4" y="4" width="16" height="16" rx="3" ry="3" />';
                 svgIcon.setAttribute('fill', 'none');
 
-                // Si se descompleta, verificar si ahora está bloqueado o disponible
+                // Si se desmarca como completado, verifica si ahora está bloqueado o disponible
                 if (isCourseLocked(courseId)) {
                     courseCard.classList.add('locked');
                 } else {
                     courseCard.classList.add('available');
                 }
             }
-            await saveCompletedCoursesToFirestore(); // Guardar cambios en Firestore
-            // renderCurriculum() se llamará automáticamente por el onSnapshot de Firestore
+            await saveCompletedCoursesToFirestore(); // Guarda los cambios en Firestore
+            // renderCurriculum() se llamará automáticamente por el onSnapshot de Firestore,
+            // asegurando que la UI se actualice con los nuevos estados de desbloqueo.
         }
 
         /**
          * Renderiza la cuadrícula de la malla, agrupando cursos por semestre.
-         * También inicializa el estado de completado y bloqueado/disponible.
+         * Aplica los estados visuales de completado, disponible y bloqueado.
          */
         function renderCurriculum() {
-            // No llamar a loadCompletedCourses() aquí, ya que onSnapshot lo maneja
+            // Agrupa los cursos por semestre para una visualización organizada
             const semesters = {};
             courses.forEach(course => {
                 if (!semesters[course.semester]) {
@@ -487,8 +500,9 @@
                 semesters[course.semester].push(course);
             });
 
-            curriculumGrid.innerHTML = '';
+            curriculumGrid.innerHTML = ''; // Limpia el contenido previo de la cuadrícula
 
+            // Ordena los semestres numéricamente
             const sortedSemesters = Object.keys(semesters).sort((a, b) => parseInt(a) - parseInt(b));
 
             sortedSemesters.forEach(semesterNum => {
@@ -502,24 +516,26 @@
                     courseCard.className = 'course-card';
 
                     const isCompleted = completedCoursesSet.has(course.id);
-                    const isLocked = !isCompleted && isCourseLocked(course.id); // Un curso no puede estar bloqueado y completado a la vez
+                    // Un curso no puede estar bloqueado y completado a la vez
+                    const isLocked = !isCompleted && isCourseLocked(course.id);
 
+                    // Aplica las clases CSS según el estado del curso
                     if (isCompleted) {
                         courseCard.classList.add('completed');
                     } else if (isLocked) {
                         courseCard.classList.add('locked');
-                        // Añadir título para el tooltip de cursos bloqueados
+                        // Añade el título para el tooltip de cursos bloqueados
                         const uncompletedReqs = getUncompletedPrerequisites(course.id);
                         if (uncompletedReqs.length > 0) {
                             courseCard.title = `Necesitas completar: ${uncompletedReqs.join(', ')} para desbloquear este curso.`;
                         } else {
-                            courseCard.title = 'Este curso está bloqueado.'; // Fallback si no hay pre-requisitos definidos
+                            courseCard.title = 'Este curso está bloqueado.'; // Fallback si no hay pre-requisitos
                         }
                     } else {
                         courseCard.classList.add('available'); // Desbloqueado y no completado
                     }
 
-                    // Icono de alternar completado
+                    // Crea el icono de alternar completado (cuadrado SVG)
                     const toggleIconContainer = document.createElement('div');
                     toggleIconContainer.className = `toggle-completion-icon ${isCompleted ? 'completed' : 'uncompleted'} ${isLocked ? 'locked-icon' : ''}`;
                     toggleIconContainer.dataset.courseId = course.id;
@@ -538,15 +554,16 @@
                     }
 
                     toggleIconContainer.appendChild(svgIcon);
+                    // Añade el evento de clic al icono para alternar el estado de completado
                     toggleIconContainer.addEventListener('click', (event) => {
-                        event.stopPropagation(); // Evitar que el clic en el icono active la tarjeta
-                        if (!isLocked) {
+                        event.stopPropagation(); // Evita que el clic en el icono active la selección de la tarjeta
+                        if (!isLocked) { // Solo permite alternar si el curso no está bloqueado
                             toggleCourseCompletion(course.id, !completedCoursesSet.has(course.id));
                         }
                     });
                     courseCard.appendChild(toggleIconContainer);
 
-                    // Contenido del curso (nombre y créditos)
+                    // Contenido principal del curso (nombre y créditos)
                     const courseContent = document.createElement('div');
                     courseContent.className = 'flex flex-col justify-center items-center w-full h-full';
                     courseContent.innerHTML = `
@@ -555,11 +572,13 @@
                     `;
                     courseCard.appendChild(courseContent);
 
-                    // Listener para seleccionar la tarjeta (solo si no está bloqueado)
+                    // Añade el evento de clic a la tarjeta para seleccionar y mostrar detalles
                     courseCard.addEventListener('click', () => {
                         if (isLocked) {
-                            displayTemporaryMessage(courseCard.title); // Muestra el mensaje al hacer clic en un curso bloqueado
+                            // Si el curso está bloqueado, muestra un mensaje temporal
+                            displayTemporaryMessage(courseCard.title);
                         } else {
+                            // Si no está bloqueado, selecciona el curso y muestra sus detalles
                             selectCourse(course.id);
                         }
                     });
@@ -570,11 +589,12 @@
         }
 
         /**
-         * Maneja la selección de un curso, mostrando sus detalles y resaltando
-         * pre-requisitos y post-requisitos.
+         * Maneja la selección de un curso, mostrando sus detalles en el panel lateral
+         * y resaltando sus pre-requisitos y post-requisitos en la malla.
          * @param {string} courseId - El ID del curso seleccionado.
          */
         function selectCourse(courseId) {
+            // Remueve las clases de selección y resaltado de todas las tarjetas
             document.querySelectorAll('.course-card').forEach(card => {
                 card.classList.remove('selected', 'prerequisite', 'post-requisite');
             });
@@ -585,16 +605,20 @@
                 return;
             }
 
+            // Resalta la tarjeta del curso seleccionado
             document.getElementById(`course-${courseId}`).classList.add('selected');
             selectedCourseId = courseId;
 
+            // Actualiza el panel de detalles con la información del curso seleccionado
             detailName.textContent = selectedCourse.name;
             detailCredits.textContent = selectedCourse.credits;
             detailSemester.textContent = selectedCourse.semester;
 
+            // Limpia las listas de pre-requisitos y post-requisitos
             detailPrerequisites.innerHTML = '';
             detailPostrequisites.innerHTML = '';
 
+            // Muestra y resalta los pre-requisitos
             if (selectedCourse.prerequisites.length > 0) {
                 selectedCourse.prerequisites.forEach(preReqId => {
                     const preReqCourse = courses.find(c => c.id === preReqId);
@@ -603,6 +627,7 @@
                         listItem.textContent = preReqCourse.name;
                         detailPrerequisites.appendChild(listItem);
                         const preReqCard = document.getElementById(`course-${preReqId}`);
+                        // Solo resalta si el pre-requisito no está completado
                         if (preReqCard && !completedCoursesSet.has(preReqId)) {
                             preReqCard.classList.add('prerequisite');
                         }
@@ -614,6 +639,7 @@
                 detailPrerequisites.appendChild(listItem);
             }
 
+            // Muestra y resalta los post-requisitos
             const postRequisites = courses.filter(c => c.prerequisites.includes(courseId));
             if (postRequisites.length > 0) {
                 postRequisites.forEach(postReqCourse => {
@@ -621,6 +647,7 @@
                     listItem.textContent = postReqCourse.name;
                     detailPostrequisites.appendChild(listItem);
                     const postReqCard = document.getElementById(`course-${postReqCourse.id}`);
+                    // Solo resalta si el post-requisito no está completado y no está bloqueado
                     if (postReqCard && !completedCoursesSet.has(postReqCourse.id) && !isCourseLocked(postReqCourse.id)) {
                         postReqCard.classList.add('post-requisite');
                     }
@@ -631,19 +658,21 @@
                 detailPostrequisites.appendChild(listItem);
             }
 
-            courseDetailsPanel.classList.remove('hidden');
+            courseDetailsPanel.classList.remove('hidden'); // Muestra el panel de detalles
         }
 
+        // Event listener para el botón "Cerrar Detalles"
         closeDetailsButton.addEventListener('click', () => {
-            courseDetailsPanel.classList.add('hidden');
+            courseDetailsPanel.classList.add('hidden'); // Oculta el panel de detalles
+            // Remueve las clases de selección y resaltado de todas las tarjetas
             document.querySelectorAll('.course-card').forEach(card => {
                 card.classList.remove('selected', 'prerequisite', 'post-requisite');
             });
-            selectedCourseId = null;
+            selectedCourseId = null; // Reinicia el curso seleccionado
         });
 
-        // La renderización inicial se dispara después de la autenticación de Firebase
-        // window.onload = renderCurriculum; // Ya no es necesario aquí
+        // La renderización inicial de la malla se dispara automáticamente
+        // después de que Firebase autentica al usuario y carga los datos.
     </script>
 </body>
 </html>
