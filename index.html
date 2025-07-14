@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malla Interactiva Ing.Civil Computacion.</title>
+    <title>Malla Interactiva de Carrera</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -24,7 +24,6 @@
 
         /* Estilos generales para las tarjetas de curso */
         .course-card {
-            /* Aumentado el padding para dar más espacio al icono */
             @apply bg-white p-6 rounded-xl shadow-lg transition-all duration-300 ease-in-out border relative;
             min-height: 120px;
             display: flex;
@@ -154,13 +153,17 @@
             @apply px-5 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors duration-200 shadow-md;
         }
 
-        /* Estilo para el mensaje temporal de bloqueo */
-        #temp-locked-message {
-            @apply fixed bottom-8 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300 opacity-0;
-            pointer-events: none; /* No bloquear interacciones debajo */
+        /* Estilo para el mensaje de bloqueo persistente */
+        #locked-course-info {
+            @apply bg-red-100 text-red-700 border border-red-300 px-4 py-3 rounded-lg text-center font-medium mb-8 transition-opacity duration-300;
+            min-height: 50px; /* Asegura un espacio mínimo */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0; /* Oculto por defecto */
         }
-        #temp-locked-message.opacity-100 {
-            opacity: 1;
+        #locked-course-info.active {
+            opacity: 1; /* Visible cuando está activo */
         }
 
         /* Estilos para el indicador de carga */
@@ -179,13 +182,16 @@
     <div class="container-wrapper">
         <h1 class="text-4xl font-bold text-center text-gray-800 mb-4">Malla Interactiva de Carrera</h1>
         <p class="text-center text-gray-600 mb-2">
-            Haz clic en el icono de **cuadrado/check** para marcar un curso como completado.
-            Los cursos **disponibles/en curso** tienen un borde azul oscuro.
-            Los cursos **bloqueados** (pre-requisitos no cumplidos) están en gris y no son interactivos.
+            Haz clic en el icono de de cuadrado, para marcar un curso como completado.
+            Los cursos disponibles/en curso tienen un borde azul oscuro.
+            Los cursos bloqueados (pre-requisitos no cumplidos) están en gris y no son interactivos.
             Haz clic en cualquier otra parte del curso (si está disponible) para ver sus detalles y resaltar sus pre-requisitos (amarillo) y post-requisitos (verde).
         </p>
-        <p id="user-id-display" class="text-center text-gray-500 text-sm mb-8">Cargando usuario...</p>
 
+        <!-- Nuevo div para el mensaje de cursos bloqueados -->
+        <div id="locked-course-info" class="mb-8">
+            <!-- El mensaje se inyectará aquí -->
+        </div>
 
         <div id="curriculum-grid" class="semester-grid">
             <!-- Los cursos se inyectarán aquí mediante JavaScript -->
@@ -214,9 +220,6 @@
         </div>
     </div>
 
-    <!-- Mensaje temporal para cursos bloqueados -->
-    <div id="temp-locked-message"></div>
-
     <!-- Indicador de carga -->
     <div id="loading-indicator">Cargando...</div>
 
@@ -229,13 +232,14 @@
 
         // ***** TU CONFIGURACIÓN DE FIREBASE *****
         // Esta es la única definición de firebaseConfig que debe existir.
+        // REEMPLAZA LOS VALORES DE EJEMPLO CON LOS TUYOS REALES DE LA CONSOLA DE FIREBASE.
         const firebaseConfig = {
-          apiKey: "AIzaSyB3KZeSDqI3HgS_tA6MMi4CLnEqA_i3rk4",
-          authDomain: "malla-ing.firebaseapp.com",
-          projectId: "malla-ing",
-          storageBucket: "malla-ing.firebasestorage.app",
-          messagingSenderId: "45163661704",
-          appId: "1:45163661704:web:3539b656e138f61c82523d",
+          apiKey: "AIzaSyB3KZeSDqI3HgS_tA6MMi4CLnEqA_i3rk4", // TU_API_KEY
+          authDomain: "malla-ing.firebaseapp.com", // TU_AUTH_DOMAIN
+          projectId: "malla-ing", // TU_PROJECT_ID
+          storageBucket: "malla-ing.firebasestorage.app", // TU_STORAGE_BUCKET
+          messagingSenderId: "45163661704", // TU_MESSAGING_SENDER_ID
+          appId: "1:45163661704:web:3539b656e138f61c82523d", // TU_APP_ID
           measurementId: "G-P2S0KFFVZS" // Puedes dejarlo o quitarlo si no usas Analytics
         };
         // ****************************************
@@ -250,7 +254,10 @@
         let userId = 'loading'; // Estado inicial del ID de usuario
 
         const loadingIndicator = document.getElementById('loading-indicator');
-        const userIdDisplay = document.getElementById('user-id-display');
+        // const userIdDisplay = document.getElementById('user-id-display'); // Ya no se usa para mostrar el ID
+
+        // Nuevo elemento para el mensaje de curso bloqueado
+        const lockedCourseInfoDiv = document.getElementById('locked-course-info');
 
         /**
          * Muestra u oculta el indicador de carga.
@@ -274,7 +281,7 @@
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     userId = user.uid; // Asigna el ID del usuario autenticado
-                    userIdDisplay.textContent = `ID de Usuario: ${userId}`;
+                    // userIdDisplay.textContent = `ID de Usuario: ${userId}`; // Ya no se muestra el ID del usuario directamente
                     console.log("Usuario autenticado:", userId);
                     // Una vez autenticado, carga y escucha los datos de progreso del usuario desde Firestore
                     loadCompletedCoursesFromFirestore();
@@ -284,7 +291,7 @@
                         await signInAnonymously(auth);
                     } catch (error) {
                         console.error("Error al autenticar anónimamente:", error);
-                        userIdDisplay.textContent = "Error al cargar usuario. Intenta recargar la página.";
+                        // userIdDisplay.textContent = "Error al cargar usuario. Intenta recargar la página."; // Mensaje de error más discreto
                         showLoading(false);
                     }
                 }
@@ -292,42 +299,93 @@
 
         } catch (error) {
             console.error("Error al inicializar Firebase:", error);
-            userIdDisplay.textContent = "Error de configuración de Firebase. Revisa tu consola de Firebase.";
+            // userIdDisplay.textContent = "Error de configuración de Firebase. Revisa tu consola."; // Mensaje de error más discreto
             showLoading(false);
         }
 
         // --- Datos y Lógica de la Malla Interactiva ---
         // Define los cursos de tu carrera. Modifica esta sección para que coincida con tu malla.
         const courses = [
-            { id: 'prog1', name: 'Programación I', semester: 1, credits: 6, prerequisites: [], description: 'Introducción a los fundamentos de la programación.' },
-            { id: 'calc1', name: 'Cálculo I', semester: 1, credits: 6, prerequisites: [], description: 'Conceptos básicos de cálculo diferencial e integral.' },
-            { id: 'fis1', name: 'Física I', semester: 1, credits: 5, prerequisites: [], description: 'Fundamentos de la mecánica clásica.' },
-            { id: 'alg_lin', name: 'Álgebra Lineal', semester: 1, credits: 5, prerequisites: [], description: 'Matrices, vectores y sistemas de ecuaciones lineales.' },
+            // Semestre 1
+            { id: 'FITCX001', name: 'Formación Integral - Vida Saludable', semester: 1, credits: 6, prerequisites: [] },
+            { id: 'INFOB010', name: 'Introducción a la Ingeniería en Computación', semester: 1, credits: 6, prerequisites: [] },
+            { id: 'QUICX001', name: 'Química General', semester: 1, credits: 3, prerequisites: [] },
+            { id: 'MATCX001', name: 'Taller de Matemáticas', semester: 1, credits: 2, prerequisites: [] },
+            { id: 'NIVEB010', name: 'Habilidades de Razonamiento Lógico', semester: 1, credits: 6, prerequisites: [] },
+            { id: 'NIVEB020', name: 'Habilidades de Trabajo Académico', semester: 1, credits: 4, prerequisites: [] },
 
-            { id: 'prog2', name: 'Programación II', semester: 2, credits: 6, prerequisites: ['prog1'], description: 'Programación orientada a objetos y estructuras de datos.' },
-            { id: 'calc2', name: 'Cálculo II', semester: 2, credits: 6, prerequisites: ['calc1'], description: 'Cálculo multivariable y series.' },
-            { id: 'fis2', name: 'Física II', semester: 2, credits: 5, prerequisites: ['fis1'], description: 'Electromagnetismo y óptica.' },
-            { id: 'mat_disc', name: 'Matemática Discreta', semester: 2, credits: 4, prerequisites: [], description: 'Lógica, conjuntos, relaciones y grafos.' },
+            // Semestre 2
+            { id: 'INFB8021', name: 'Algoritmo y Programacion', semester: 2, credits: 3, prerequisites: [] },
+            { id: 'MATCX002', name: 'Cálculo Diferencial', semester: 2, credits: 7, prerequisites: ['MATCX001'] },
+            { id: 'QUICX002', name: 'Álgebra y Geometría', semester: 2, credits: 3, prerequisites: [] },
+            { id: 'MATCX003', name: 'Ciencia de los Materiales', semester: 2, credits: 2, prerequisites: ['QUICX001'] },
+            { id: 'FISCX001', name: 'Mecánica Clásica', semester: 2, credits: 2, prerequisites: [] },
 
-            { id: 'est_dat', name: 'Estructuras de Datos', semester: 3, credits: 6, prerequisites: ['prog2'], description: 'Implementación y análisis de estructuras de datos avanzadas.' },
-            { id: 'met_num', 'name': 'Métodos Numéricos', semester: 3, credits: 5, prerequisites: ['calc2', 'prog2'], description: 'Técnicas numéricas para resolver problemas matemáticos.' },
-            { id: 'arq_comp', name: 'Arquitectura de Computadores', semester: 3, credits: 5, prerequisites: [], description: 'Organización y diseño de sistemas computacionales.' },
-            { id: 'estadistica', name: 'Estadística', semester: 3, credits: 4, prerequisites: ['calc1'], description: 'Probabilidad y estadística aplicada.' },
+            // Semestre 3
+            { id: 'MATCX004', name: 'Cálculo Integral', semester: 3, credits: 7, prerequisites: ['MATCX002'] },
+            { id: 'FISCX002', name: 'Electromagnetismo', semester: 3, credits: 3, prerequisites: ['FISCX001'] },
+            { id: 'MATCX005', name: 'Álgebra Matricial', semester: 3, credits: 2, prerequisites: ['QUICX002'] },
+            { id: 'INFOB030', name: 'Estructuras de Datos', semester: 3, credits: 3, prerequisites: ['INFOB010'] },
+            { id: 'ESTCO001', name: 'Estadística y Probabilidad', semester: 3, credits: 3, prerequisites: ['MATCX002'] },
+            { id: 'FITCXX02', name: 'Pensamiento Critico', semester: 3, credits: 1, prerequisites: [] },
 
-            { id: 'bd', name: 'Bases de Datos', semester: 4, credits: 6, prerequisites: ['est_dat'], description: 'Diseño y gestión de sistemas de bases de datos.' },
-            { id: 'sis_ope', name: 'Sistemas Operativos', semester: 4, credits: 6, prerequisites: ['arq_comp', 'prog2'], description: 'Principios y funcionamiento de los sistemas operativos.' },
-            { id: 'redes', name: 'Redes de Computadores', semester: 4, credits: 5, prerequisites: ['arq_comp'], description: 'Fundamentos de redes y protocolos de comunicación.' },
-            { id: 'ing_soft1', name: 'Ingeniería de Software I', semester: 4, credits: 5, prerequisites: ['est_dat'], description: 'Ciclo de vida del software y metodologías de desarrollo.' },
+            // Semestre 4
+            { id: 'MATCX006', name: 'Cálculo en Varias Variables', semester: 4, credits: 3, prerequisites: ['MATCX004'] },
+            { id: 'FISC0004', name: 'Optica y Ondas', semester: 4, credits: 2, prerequisites: ['FISCX002'] },
+            { id: 'FITCX004', name: 'Formación Integral - Ciudadanía', semester: 4, credits: 3, prerequisites: [] },
+            { id: 'INFOB040', name: 'Lenguajes de Programación', semester: 4, credits: 2, prerequisites: ['INFOB030'] },
+            { id: 'MATCX007', name: 'Ecuaciones Diferenciales', semester: 4, credits: 2, prerequisites: ['MATCX004'] },
+            { id: 'ESTC001', name: 'Estadistica y Probabilidad', semester: 4, credits: 2, prerequisites: ['QUICX002'] },
 
-            { id: 'ia', name: 'Inteligencia Artificial', semester: 5, credits: 6, prerequisites: ['est_dat', 'mat_disc'], description: 'Introducción a los conceptos y algoritmos de IA.' },
-            { id: 'compiladores', name: 'Compiladores', semester: 5, credits: 6, prerequisites: ['est_dat', 'mat_disc'], description: 'Diseño e implementación de compiladores.' },
-            { id: 'seg_info', name: 'Seguridad Informática', semester: 5, credits: 5, prerequisites: ['redes'], description: 'Principios de seguridad en sistemas y redes.' },
-            { id: 'ing_soft2', name: 'Ingeniería de Software II', semester: 5, credits: 5, prerequisites: ['ing_soft1', 'bd'], description: 'Patrones de diseño y gestión de proyectos de software.' },
+            // Semestre 5
+            { id: 'INDC0003', name: 'Administracion', semester: 5, credits: 3, prerequisites: ['INDC0001'] },
+            { id: 'MECCX001', name: 'Termodinámica', semester: 5, credits: 2, prerequisites: ['MATC0006'] },
+            { id: 'INFOB051', name: 'Gráficos y Lenguajes Formales', semester: 5, credits: 2, prerequisites: ['INFB8040'] },
+            { id: 'INFOB050', name: 'Bases de Datos', semester: 5, credits: 2, prerequisites: ['INFB8030'] },
+            { id: 'INFOB060', name: 'Tecnología de Computadores', semester: 5, credits: 3, prerequisites: ['MATC0005'] },
+            { id: 'FITCX005', name: 'Formación Integral Ética', semester: 5, credits: 2, prerequisites: [] },
 
-            { id: 'proy_final', name: 'Proyecto de Título', semester: 6, credits: 10, prerequisites: ['ia', 'ing_soft2'], description: 'Desarrollo de un proyecto final de carrera.' },
-            { id: 'etica', name: 'Ética Profesional', semester: 6, credits: 3, prerequisites: [], description: 'Consideraciones éticas en la ingeniería.' },
-            { id: 'optativa1', name: 'Optativa I', semester: 6, credits: 5, prerequisites: [], description: 'Curso a elección del estudiante.' },
-            { id: 'optativa2', name: 'Optativa II', semester: 6, credits: 5, prerequisites: [], description: 'Curso a elección del estudiante.' }
+            // Semestre 6
+            { id: 'INDC0002', name: 'Investigacion de Operaciones', semester: 6, credits: 3, prerequisites: ['MATC0007'] },
+            { id: 'PRMC0001', name: 'Ingenieria Ambiental', semester: 6, credits: 1, prerequisites: ['MECC0001'] },
+            { id: 'INFB8062', name: 'Sistemas de Informacion', semester: 6, credits: 2, prerequisites: ['INFB8050'] },
+            { id: 'INFB8060', name: 'Arquitectura de Computadores', semester: 6, credits: 2, prerequisites: ['MATC0005'] },
+            { id: 'HUMC0001', name: 'Inglés I', semester: 6, credits: 2, prerequisites: [] },
+            { id: 'INDC0004', name: 'Introduccion a la Economia', semester: 6, credits: 2, prerequisites: ['INDC0003'] },
+
+            // Semestre 7
+            { id: 'INFB8072', name: 'Ingenieria de Software', semester: 7, credits: 3, prerequisites: ['INFOB072'] },
+            { id: 'INFB8081', name: 'Sistemas Operativos', semester: 7, credits: 2, prerequisites: ['INFB8060'] },
+            { id: 'FITCXX03', name: 'Formacion Sello Sustentabilidad', semester: 7, credits: 2, prerequisites: ['INFOB072'] },
+            { id: 'FITCX003', name: 'Formación Sello Sustentabilidad', semester: 7, credits: 2, prerequisites: [] },
+            { id: 'HUMCX002', name: 'Inglés II', semester: 7, credits: 2, prerequisites: ['HUMCX001'] },
+            { id: 'INFOB082', name: 'Taller de Sistemas de Información', semester: 7, credits: 2, prerequisites: ['INFOB081'] },
+
+            // Semestre 8
+            { id: 'INFOB093', name: 'Simulación de Sistemas', semester: 8, credits: 3, prerequisites: ['INFOB080'] },
+            { id: 'INFOB083', name: 'Evaluación de Proyectos Informáticos', semester: 8, credits: 2, prerequisites: ['INFOB080'] },
+            { id: 'INFOB090', name: 'Computación Paralela y Distribuida', semester: 8, credits: 2, prerequisites: ['INFOB081'] },
+            { id: 'INFOB091', name: 'Desempeño de Proyectos Informáticos', semester: 8, credits: 2, prerequisites: ['INFOB083'] },
+            { id: 'INFOB092', name: 'Auditoría y Seguridad Informática', semester: 8, credits: 2, prerequisites: ['INFOB082'] },
+            { id: 'HUMCX003', name: 'Inglés III', semester: 8, credits: 2, prerequisites: ['HUMCX002'] },
+
+            // Semestre 9
+            { id: 'EFEBMXX', name: 'Electivo de Formación Especializada I', semester: 9, credits: 3, prerequisites: [] },
+            { id: 'INFOB003', name: 'Trabajo de Título I', semester: 9, credits: 2, prerequisites: ['INFOB093', 'INFOB090', 'INFOB091', 'INFOB092'] },
+            { id: 'FITCX007', name: 'Formación Sello Tecnología', semester: 9, credits: 2, prerequisites: [] },
+            { id: 'INFOB103', name: 'Gestión de Proyectos Informáticos', semester: 9, credits: 2, prerequisites: ['INFOB091'] },
+            { id: 'INFOB104', name: 'Minería de Datos', semester: 9, credits: 2, prerequisites: ['INFOB092'] },
+
+            // Semestre 10
+            { id: 'EFEBMXX2', name: 'Electivo de Formación Especializada II', semester: 10, credits: 3, prerequisites: [] },
+            { id: 'INFOB004', name: 'Trabajo de Título II', semester: 10, credits: 2, prerequisites: ['INFOB003'] },
+            { id: 'INFOB002', name: 'Optimización de Sistemas', semester: 10, credits: 2, prerequisites: ['INFOB103', 'INFOB104'] },
+            { id: 'INFOB100', name: 'Gestión de Recursos Informáticos', semester: 10, credits: 2, prerequisites: ['INFOB103'] },
+
+            // Semestre 11
+            { id: 'INFBY120', name: 'Trabajo de Título III', semester: 11, credits: 2, prerequisites: ['INFOB004'] },
+            { id: 'INFBY100', name: 'Práctica Profesional', semester: 11, credits: 2, prerequisites: ['INFOB004'] },
+            { id: 'FITCX006', name: 'Taller de Empleabilidad', semester: 11, credits: 2, prerequisites: [] }
         ];
 
         const curriculumGrid = document.getElementById('curriculum-grid');
@@ -423,28 +481,19 @@
         }
 
         /**
-         * Muestra un mensaje temporal en la parte inferior de la pantalla.
+         * Muestra un mensaje persistente en la parte superior de la cuadrícula.
          * @param {string} message - El mensaje a mostrar.
+         * @param {boolean} isActive - True para mostrar el mensaje, false para ocultarlo.
          */
-        let messageTimeoutId; // Variable para limpiar el timeout anterior y evitar múltiples mensajes
-        function displayTemporaryMessage(message) {
-            let tempMessageDiv = document.getElementById('temp-locked-message');
-            if (!tempMessageDiv) {
-                tempMessageDiv = document.createElement('div');
-                tempMessageDiv.id = 'temp-locked-message';
-                document.body.appendChild(tempMessageDiv);
+        function displayLockedCourseMessage(message, isActive) {
+            if (isActive) {
+                lockedCourseInfoDiv.textContent = message;
+                lockedCourseInfoDiv.classList.add('active');
+            } else {
+                lockedCourseInfoDiv.classList.remove('active');
+                lockedCourseInfoDiv.textContent = ''; // Limpia el texto cuando no está activo
             }
-            tempMessageDiv.textContent = message;
-            tempMessageDiv.classList.remove('opacity-0');
-            tempMessageDiv.classList.add('opacity-100');
-
-            clearTimeout(messageTimeoutId); // Limpia cualquier timeout anterior
-            messageTimeoutId = setTimeout(() => {
-                tempMessageDiv.classList.remove('opacity-100');
-                tempMessageDiv.classList.add('opacity-0');
-            }, 3000); // El mensaje desaparece después de 3 segundos
         }
-
 
         /**
          * Alterna el estado de completado de un curso y actualiza su estado visual y en Firestore.
@@ -501,6 +550,7 @@
             });
 
             curriculumGrid.innerHTML = ''; // Limpia el contenido previo de la cuadrícula
+            displayLockedCourseMessage('', false); // Oculta el mensaje de bloqueo al renderizar
 
             // Ordena los semestres numéricamente
             const sortedSemesters = Object.keys(semesters).sort((a, b) => parseInt(a) - parseInt(b));
@@ -575,11 +625,18 @@
                     // Añade el evento de clic a la tarjeta para seleccionar y mostrar detalles
                     courseCard.addEventListener('click', () => {
                         if (isLocked) {
-                            // Si el curso está bloqueado, muestra un mensaje temporal
-                            displayTemporaryMessage(courseCard.title);
+                            // Si el curso está bloqueado, muestra un mensaje persistente
+                            displayLockedCourseMessage(courseCard.title, true);
                         } else {
                             // Si no está bloqueado, selecciona el curso y muestra sus detalles
                             selectCourse(course.id);
+                            displayLockedCourseMessage('', false); // Oculta el mensaje si se selecciona un curso no bloqueado
+                        }
+                    });
+                    // Agrega evento mouseleave para ocultar el mensaje cuando el mouse sale de un curso bloqueado
+                    courseCard.addEventListener('mouseleave', () => {
+                        if (isLocked) {
+                            displayLockedCourseMessage('', false);
                         }
                     });
                     semesterDiv.appendChild(courseCard);
